@@ -7,7 +7,7 @@ import express from "express";
 import { readFileSync } from "fs";
 import https from "https";
 import morgan from "morgan";
-import { type AddressInfo } from "net";
+import { type AddressInfo, createServer } from "net";
 import path from "path";
 import { registerRoutesSync } from "src/AppUtils/RegisterRoutes";
 import Util from "src/AppUtils/Utils";
@@ -31,30 +31,26 @@ if (Constants.VerboseAPIServerLogging) {
     );
 }
 
-const HttpsOptions = Util.generateSelfSignedCertificate();
-const localCertificate = new X509Certificate(HttpsOptions.cert);
+let localCertificate: X509Certificate | undefined;
 
 /** Trust only the certificate generated for this process, never other invalid HTTPS certificates. */
 export function isLocalServerCertificate (data: string): boolean {
     try {
-        return localCertificate.raw.equals(new X509Certificate(data).raw);
+        return !!localCertificate && localCertificate.raw.equals(new X509Certificate(data).raw);
     } catch {
         return false;
     }
 }
 
-const server = https.createServer(
-    {
-        key: HttpsOptions.private,
-        cert: HttpsOptions.cert,
-    },
-    app,
-);
+const tlsReady = Util.generateSelfSignedCertificate().then(({ private: key, cert }) => {
+    localCertificate = new X509Certificate(cert);
+    return https.createServer({ key, cert }, app);
+});
 
 const ignoreHeaders = ["cookie", "sec-", "referer", "origin", "authorization", "host"];
 
 // Handle headers
-app.all("*", function (req, res, next) {
+app.all("/{*path}", function (req, res, next) {
     req.originalHeaders = req.headers;
     const headers: typeof req.headers = {};
     Object.keys(req.headers).forEach(key => {
@@ -76,7 +72,7 @@ app.all("*", function (req, res, next) {
 
 registerRoutesSync(app, path.resolve(__dirname, "routes"), ["/api/v10", "/api/v9", "/api"]);
 
-app.all("/developers/*", (req, res) => {
+app.all("/developers/{*path}", (req, res) => {
     return res.redirect("/app");
 });
 
@@ -102,7 +98,19 @@ app.use((req, res, next) => {
 });
 
 export default async function startAppServer (): Promise<number> {
+    // Electron needs the loopback port before its ready event. Hold connections until TLS is ready.
+    const server = createServer({ pauseOnConnect: true }, socket => {
+        tlsReady.then(tls => {
+            if (socket.destroyed) return;
+            tls.emit("connection", socket);
+            socket.resume();
+        }, () => socket.destroy());
+    });
     return new Promise((resolve, reject) => {
+        tlsReady.catch(error => {
+            server.close();
+            reject(error);
+        });
         const callback = () => {
             const address = server.address() as AddressInfo;
             resolve(address.port);

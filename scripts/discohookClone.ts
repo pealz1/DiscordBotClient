@@ -4,6 +4,7 @@ import { execFileSync } from "child_process";
 import { existsSync } from "fs";
 import path from "path";
 
+import { applyDependencyPatch } from "./applyDependencyPatch";
 import versions from "./build-dependencies.json";
 
 const root = process.cwd();
@@ -24,6 +25,8 @@ const current = execFileSync("git", ["rev-parse", "HEAD"], { cwd: discohookDir, 
 if (current !== versions.discohook) {
     throw new Error(discohookDir + " is at " + current + "; expected " + versions.discohook + ". Resolve this checkout manually before building.");
 }
+
+applyDependencyPatch(discohookDir, "discohook-audit-refresh.patch");
 
 const npmCli = process.env.npm_execpath;
 if (!npmCli) throw new Error("Run dependency setup through npm run requirement.");

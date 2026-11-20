@@ -4,6 +4,7 @@ import { execFileSync } from "child_process";
 import { existsSync } from "fs";
 import path from "path";
 
+import { applyDependencyPatch } from "./applyDependencyPatch";
 import versions from "./build-dependencies.json";
 
 const root = process.cwd();
@@ -28,4 +29,5 @@ function prepareCheckout (directory: string, repository: string, revision: strin
 }
 
 prepareCheckout(vencordDir, "https://github.com/Vendicated/Vencord.git", versions.vencord);
-run(process.execPath, [path.join(root, "node_modules", "pnpm", "bin", "pnpm.cjs"), "install", "--frozen-lockfile"], vencordDir);
+applyDependencyPatch(vencordDir, "vencord-audit-fix.patch");
+run(process.execPath, [path.join(root, "node_modules", "pnpm", "bin", "pnpm.mjs"), "install", "--frozen-lockfile"], vencordDir);
