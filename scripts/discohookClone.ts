@@ -27,6 +27,7 @@ if (current !== versions.discohook) {
 }
 
 applyDependencyPatch(discohookDir, "discohook-audit-refresh.patch");
+applyDependencyPatch(discohookDir, "discohook-i18next.patch");
 
 const npmCli = process.env.npm_execpath;
 if (!npmCli) throw new Error("Run dependency setup through npm run requirement.");
